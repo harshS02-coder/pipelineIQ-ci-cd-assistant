@@ -1,5 +1,5 @@
 import { Queue, Worker } from 'bullmq';
-import { redisConfig } from '../config/redis.js';
+import { createRedisClient } from '../config/redis.js';
 import logger from '../config/logger.js';
 import LogParser from '../services/logParser.js';
 import llmService from '../services/llmService.js';
@@ -12,7 +12,7 @@ import AnalysisResult from '../models/AnalysisResult.js';
  */
 export const createQueues = () => {
   const analysisQueue = new Queue('pipeline-analysis', {
-    connection: redisConfig,
+    connection: createRedisClient(),
     defaultJobOptions: {
       attempts: parseInt(process.env.QUEUE_MAX_ATTEMPTS || '3'),
       backoff: {
@@ -29,7 +29,7 @@ export const createQueues = () => {
   });
 
   const fixQueue = new Queue('auto-fix', {
-    connection: redisConfig,
+    connection: createRedisClient(),
     defaultJobOptions: {
       attempts: parseInt(process.env.QUEUE_MAX_ATTEMPTS || '3'),
       backoff: {
@@ -43,7 +43,7 @@ export const createQueues = () => {
   });
 
   const notificationQueue = new Queue('notifications', {
-    connection: redisConfig,
+    connection: createRedisClient(),
     defaultJobOptions: {
       attempts: 3,
       backoff: {
@@ -214,7 +214,7 @@ export const createWorkers = () => {
       }
     },
     {
-      connection: redisConfig,
+      connection: createRedisClient(),
       concurrency: parseInt(process.env.QUEUE_MAX_WORKERS || '5'),
     }
   );
@@ -249,7 +249,7 @@ export const createWorkers = () => {
       }
     },
     {
-      connection: redisConfig,
+      connection: createRedisClient(),
       concurrency: 2, // Run fixes serially for safety
     }
   );
@@ -268,7 +268,7 @@ export const createWorkers = () => {
       return { notified: true };
     },
     {
-      connection: redisConfig,
+      connection: createRedisClient(),
       concurrency: 5,
     }
   );

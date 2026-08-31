@@ -4,31 +4,37 @@ import logger from './logger.js';
 
 const redisUrl = process.env.REDIS_URL;
 
-export const redisConfig = redisUrl
-  ? {
+/**
+ * Creates a fresh ioredis instance compatible with BullMQ and standalone usage.
+ */
+export function createRedisClient() {
+  if (redisUrl) {
+    return new Redis(redisUrl, {
       maxRetriesPerRequest: null,
       enableReadyCheck: false,
       tls: redisUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
-    }
-  : {
-      host: process.env.REDIS_HOST || 'localhost',
-      port: parseInt(process.env.REDIS_PORT || '6379', 10),
-      password: process.env.REDIS_PASSWORD || undefined,
-      retryStrategy: (times) => Math.min(times * 50, 2000),
-      maxRetriesPerRequest: null,
-      enableReadyCheck: false,
-    };
+      retryStrategy: (times) => Math.min(times * 100, 3000),
+    });
+  }
 
-export const redis = redisUrl
-  ? new Redis(redisUrl, redisConfig)
-  : new Redis(redisConfig);
+  return new Redis({
+    host: process.env.REDIS_HOST || 'localhost',
+    port: parseInt(process.env.REDIS_PORT || '6379', 10),
+    password: process.env.REDIS_PASSWORD || undefined,
+    retryStrategy: (times) => Math.min(times * 100, 3000),
+    maxRetriesPerRequest: null,
+    enableReadyCheck: false,
+  });
+}
+
+export const redis = createRedisClient();
 
 redis.on('connect', () => {
-  logger.info('Redis connected');
+  logger.info('Redis connected successfully');
 });
 
 redis.on('error', (error) => {
-  logger.error({ err: error }, 'Redis error');
+  logger.error({ err: error.message, code: error.code }, 'Redis connection error (verify REDIS_URL/REDIS_HOST)');
 });
 
 redis.on('close', () => {

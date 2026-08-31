@@ -515,9 +515,12 @@ class GitHubService {
    * @returns {string} The full authorization URL
    */
   static buildAuthorizationUrl(state) {
+    const baseUrl = (process.env.WEBHOOK_BASE_URL || 'http://localhost:3000').trim().replace(/\/+$/, '');
+    const redirectUri = `${baseUrl}/api/v1/github/callback`;
+
     const params = new URLSearchParams({
       client_id: process.env.GITHUB_CLIENT_ID,
-      redirect_uri: `${process.env.WEBHOOK_BASE_URL || 'http://localhost:3000'}/api/v1/github/callback`,
+      redirect_uri: redirectUri,
       scope: 'repo admin:repo_hook read:user',
       state,
     });

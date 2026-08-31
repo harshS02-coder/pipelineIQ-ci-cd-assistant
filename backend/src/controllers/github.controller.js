@@ -289,8 +289,8 @@ class GitHubController {
       const webhookSecret = generateWebhookSecret();
 
       // Build the webhook URL (our public endpoint)
-      const baseUrl = process.env.WEBHOOK_BASE_URL || 'http://localhost:3000';
-      const webhookUrl = `${baseUrl}/webhook/github`;
+      const baseUrl = (process.env.WEBHOOK_BASE_URL || 'http://localhost:3000').trim().replace(/\/+$/, '');
+      const webhookUrl = `${baseUrl}/api/v1/webhooks/github`;
 
       const [owner, repo] = repoFullName.split('/');
 
