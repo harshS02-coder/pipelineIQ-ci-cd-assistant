@@ -1,0 +1,73 @@
+name: CI/CD Failure Analysis
+
+on:
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  analyze_failure:
+    name: Submit failed run logs
+    runs-on: ubuntu-latest
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    steps:
+      - name: Download workflow run logs (ZIP)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euo pipefail
+          echo "Downloading logs for run_id=$RUN_ID"
+          curl -sS -L \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -o logs.zip \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${RUN_ID}/logs"
+
+          # Concatenate all files in the ZIP into a single text stream.
+          unzip -p logs.zip > logs.txt
+
+          # Keep payload size reasonable (tune as needed).
+          head -c 200000 logs.txt > logs.trunc.txt
+          mv logs.trunc.txt logs.txt
+
+      - name: Submit failure to LLM DevOps Assistant
+        env:
+          API_URL: ${{ secrets.LLM_ASSISTANT_URL }}
+          API_KEY: ${{ secrets.LLM_ASSISTANT_API_KEY }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          WORKFLOW_NAME: ${{ github.event.workflow_run.name }}
+          BRANCH: ${{ github.event.workflow_run.head_branch }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+          ACTOR: ${{ github.actor }}
+          REPO_URL: ${{ github.server_url }}/${{ github.repository }}
+        run: |
+          set -euo pipefail
+          if [ -z "${API_URL:-}" ]; then
+            echo "Missing secret LLM_ASSISTANT_URL (e.g. https://your-domain.com)" >&2
+            exit 1
+          fi
+          if [ -z "${API_KEY:-}" ]; then
+            echo "Missing secret LLM_ASSISTANT_API_KEY" >&2
+            exit 1
+          fi
+
+          payload=$(jq -n --rawfile logs logs.txt \
+            --arg pipelineId "$RUN_ID" \
+            --arg pipelineName "$WORKFLOW_NAME" \
+            --arg cicdProvider "github-actions" \
+            --arg branch "$BRANCH" \
+            --arg commitSha "$SHA" \
+            --arg commitAuthor "$ACTOR" \
+            --arg repositoryUrl "$REPO_URL" \
+            '{logs:$logs, pipelineId:$pipelineId, pipelineName:$pipelineName, cicdProvider:$cicdProvider, branch:$branch, commitSha:$commitSha, commitAuthor:$commitAuthor, repositoryUrl:$repositoryUrl}')
+
+          echo "$payload" | jq -r '"Submitting logs bytes=" + (.logs|tostring|length|tostring)'
+          curl -sS -X POST "${API_URL%/}/api/v1/analyze/submit" \
+            -H "X-API-Key: $API_KEY" \
+            -H "Content-Type: application/json" \
+            -d "$payload" | jq .

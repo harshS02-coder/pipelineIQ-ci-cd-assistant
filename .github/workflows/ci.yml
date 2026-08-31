@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "Choose pass/fail for testing"
+        required: true
+        default: "fail"
+        type: choice
+        options:
+          - fail
+          - pass
+
+jobs:
+  demo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show scenario
+        run: echo "Scenario=${{ inputs.scenario }}"
+
+      - name: Intentionally fail (scenario=fail)
+        if: ${{ inputs.scenario == 'fail' }}
+        run: |
+          echo "Forcing a failure to test LLM log analysis"
+          echo "Simulated error: Cannot find module 'express'"
+          echo "npm ERR! code MODULE_NOT_FOUND"
+          exit 1
+
+      - name: Succeed (scenario=pass)
+        if: ${{ inputs.scenario == 'pass' }}
+        run: echo "CI passed"

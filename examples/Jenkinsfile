@@ -1,0 +1,90 @@
+#!/bin/bash
+
+# Jenkins Pipeline Example
+# Add this to your Jenkins Pipeline as a Declarative Pipeline
+
+cat << 'EOF' > Jenkinsfile-llm
+
+pipeline {
+    agent any
+    
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '10'))
+        timeout(time: 1, unit: 'HOURS')
+    }
+    
+    environment {
+        LLM_API_URL = 'https://llm-devops.your-domain.com/api/v1/analyze'
+        LLM_API_KEY = credentials('llm-assistant-api-key')
+        REPO_URL = "${GIT_URL}"
+        BRANCH = "${GIT_BRANCH}"
+        COMMIT_SHA = "${GIT_COMMIT}"
+    }
+    
+    post {
+        failure {
+            script {
+                // Get build logs
+                def logs = currentBuild.rawBuild.getLog(500).join('\n')
+                
+                // Remove sensitive information
+                logs = logs.replaceAll(/(password|secret|token|api_key)=\S+/, '$1=***REDACTED***')
+                
+                // Send to LLM Assistant
+                sh '''
+                    curl -X POST "${LLM_API_URL}/submit" \
+                        -H "X-API-Key: ${LLM_API_KEY}" \
+                        -H "Content-Type: application/json" \
+                        -d @- << PAYLOAD
+                    {
+                        "logs": ${logs | jq -Rs .},
+                        "pipelineId": "${BUILD_ID}",
+                        "pipelineName": "${JOB_NAME}",
+                        "cicdProvider": "jenkins",
+                        "branch": "${BRANCH}",
+                        "commitSha": "${COMMIT_SHA}",
+                        "repositoryUrl": "${REPO_URL}"
+                    }
+PAYLOAD
+                '''
+                
+                echo "✅ Failure analysis submitted to LLM Assistant"
+            }
+        }
+        
+        always {
+            // Archive logs for reference
+            archiveArtifacts artifacts: 'logs/**', allowEmptyArchive: true
+            
+            // Cleanup
+            cleanWs()
+        }
+    }
+    
+    stages {
+        stage('Build') {
+            steps {
+                echo "Building application..."
+                // Your build steps here
+            }
+        }
+        
+        stage('Test') {
+            steps {
+                echo "Running tests..."
+                // Your test steps here
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                echo "Deploying..."
+                // Your deploy steps here
+            }
+        }
+    }
+}
+
+EOF
+
+echo "✅ Jenkinsfile created"

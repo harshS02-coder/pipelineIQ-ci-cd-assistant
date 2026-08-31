@@ -1,0 +1,9 @@
+name: Test Workflow
+on: [push]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Force Fail
+        run: exit 1
