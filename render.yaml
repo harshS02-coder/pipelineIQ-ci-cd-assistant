@@ -1,0 +1,72 @@
+# ==============================================================================
+# PipelineIQ — Render Infrastructure Blueprint (render.yaml)
+# Defines the Web Service, Redis Queue, and MongoDB stack on Render
+# ==============================================================================
+
+services:
+  # 1. PipelineIQ Full-Stack Web Service (Express API + Terminal UI)
+  - type: web
+    name: pipelineiq-api
+    runtime: node
+    rootDir: backend
+    plan: free
+    region: oregon
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - key: LLM_PROVIDER
+        value: groq
+      - key: GROQ_MODEL
+        value: llama-3.3-70b-versatile
+      - key: GROQ_API_KEY
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_WEBHOOK_SECRET
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: ENCRYPTION_KEY
+        sync: false
+      - key: WEBHOOK_BASE_URL
+        sync: false
+      - key: MONGODB_URI
+        sync: false
+      # Automatically wire Redis from the managed Redis service below
+      - key: REDIS_URL
+        fromRedis:
+          name: pipelineiq-redis
+          property: connectionString
+
+  # 2. Private Service: MongoDB Database (Containerized with persistent disk)
+  # NOTE: On Render Free tier, MongoDB Atlas is recommended for 100% free permanent storage.
+  # If you prefer running MongoDB directly on Render, this private service can be used:
+  # - type: pserv
+  #   name: pipelineiq-mongodb
+  #   runtime: image
+  #   image:
+  #     url: mongo:6.0
+  #   region: oregon
+  #   disk:
+  #     name: mongo-data
+  #     mountPath: /data/db
+  #     sizeGB: 10
+  #   envVars:
+  #     - key: MONGO_INITDB_ROOT_USERNAME
+  #       value: root
+  #     - key: MONGO_INITDB_ROOT_PASSWORD
+  #       generateValue: true
+
+  # 3. Managed Redis Service (For BullMQ Failure Analysis & Fix Queues)
+  - type: redis
+    name: pipelineiq-redis
+    region: oregon
+    plan: free
+    ipAllowList: [] # Internal network only
